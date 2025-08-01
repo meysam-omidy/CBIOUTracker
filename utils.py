@@ -1,0 +1,113 @@
+import numpy as np
+import lap
+import time
+
+class ClassPropertyDescriptor:
+    def __init__(self, fget):
+        self.fget = fget
+
+    def __get__(self, obj, cls):
+        return self.fget(cls)
+
+
+def classproperty(func):
+    return ClassPropertyDescriptor(func)
+
+def count_time(func):
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        result = func(*args, **kwargs)
+        end = time.time()
+        
+        print(f"{int((end-start) * 1000)} ms    {func.__name__}    {kwargs.get('cost_matrix').shape if np.any(kwargs.get('cost_matrix', None)) else ''}")
+        return result
+    return wrapper
+
+def batch_biou(bbox1, bbox2, buffer_scale):
+    bbox1[:, 2:] *= (1 + buffer_scale)
+    bbox2[:, 2:] *= (1 + buffer_scale)
+    bbox1 = xywh_to_tlbr(bbox1)
+    bbox2 = xywh_to_tlbr(bbox2)
+    bbox1 = np.expand_dims(bbox1, 1)
+    bbox2 = np.expand_dims(bbox2, 0)
+    xx1 = np.maximum(bbox1[..., 0], bbox2[..., 0])
+    yy1 = np.maximum(bbox1[..., 1], bbox2[..., 1])
+    xx2 = np.minimum(bbox1[..., 2], bbox2[..., 2])
+    yy2 = np.minimum(bbox1[..., 3], bbox2[..., 3])
+    w = np.maximum(0., xx2 - xx1)
+    h = np.maximum(0., yy2 - yy1)
+    wh = w * h
+    o = wh / ((bbox1[..., 2] - bbox1[..., 0]) * (bbox1[..., 3] - bbox1[..., 1])                                      
+        + (bbox2[..., 2] - bbox2[..., 0]) * (bbox2[..., 3] - bbox2[..., 1]) - wh)                                              
+    return(o) 
+
+def assignment(cost_matrix, threshold):
+    if cost_matrix.size == 0:
+        return np.empty((0, 2), dtype=int), tuple(range(cost_matrix.shape[0])), tuple(range(cost_matrix.shape[1]))
+    matches, unmatched_a, unmatched_b = [], [], []
+    cost, x, y = lap.lapjv(cost_matrix, extend_cost=True, cost_limit=threshold)
+    for ix, mx in enumerate(x):
+        if mx >= 0:
+            matches.append([ix, mx])
+    unmatched_a = np.where(x < 0)[0]
+    unmatched_b = np.where(y < 0)[0]
+    matches = np.asarray(matches)
+    return matches, unmatched_a, unmatched_b
+
+def match_bboxes(bboxes1, bboxes2, biou_threshold, buffer_scale):
+    if len(bboxes1) == 0:
+        return [], [], [i for i in range(len(bboxes2))]
+    elif len(bboxes2) == 0:
+        return [], [i for i in range(len(bboxes1))], []
+    else:
+        cost_matrix = 1 - batch_biou(np.array(bboxes1), np.array(bboxes2), buffer_scale)
+        matched_tracks, unmatched_tracks, unmatched_detections = assignment(cost_matrix, 1 - biou_threshold)
+        return matched_tracks, unmatched_tracks, unmatched_detections
+    
+def tlbr_to_tlwh(bbox:np.ndarray) -> np.ndarray:
+    o = np.zeros_like(bbox, dtype=float)
+    o[..., 0] = bbox[..., 0]
+    o[..., 1] = bbox[..., 1]
+    o[..., 2] = bbox[..., 2] - bbox[..., 0]
+    o[..., 3] = bbox[..., 3] - bbox[..., 1]
+    return o
+
+def tlbr_to_xywh(bbox:np.ndarray) -> np.ndarray:
+    o = np.zeros_like(bbox, dtype=float)
+    o[..., 0] = (bbox[..., 0] + bbox[..., 2]) / 2
+    o[..., 1] = (bbox[..., 1] + bbox[..., 3]) / 2
+    o[..., 2] = bbox[..., 2] - bbox[..., 0]
+    o[..., 3] = bbox[..., 3] - bbox[..., 1]
+    return o
+
+def tlwh_to_tlbr(bbox:np.ndarray) -> np.ndarray:
+    o = np.zeros_like(bbox, dtype=float)
+    o[..., 0] = bbox[..., 0]
+    o[..., 1] = bbox[..., 1]
+    o[..., 2] = bbox[..., 0] + bbox[..., 2]
+    o[..., 3] = bbox[..., 1] + bbox[..., 3]
+    return o
+
+def tlwh_to_xywh(bbox:np.ndarray) -> np.ndarray:
+    o = np.zeros_like(bbox, dtype=float)
+    o[..., 0] = bbox[..., 0] + bbox[..., 2] / 2
+    o[..., 1] = bbox[..., 1] + bbox[..., 3] / 2
+    o[..., 2] = bbox[..., 2]
+    o[..., 3] = bbox[..., 3]
+    return o
+
+def xywh_to_tlwh(bbox:np.ndarray) -> np.ndarray:
+    o = np.zeros_like(bbox, dtype=float)
+    o[..., 0] = bbox[..., 0] - bbox[..., 2] / 2
+    o[..., 1] = bbox[..., 1] - bbox[..., 3] / 2
+    o[..., 2] = bbox[..., 2]
+    o[..., 3] = bbox[..., 3]
+    return o
+
+def xywh_to_tlbr(bbox:np.ndarray) -> np.ndarray:
+    o = np.zeros_like(bbox, dtype=float)
+    o[..., 0] = bbox[..., 0] - bbox[..., 2] / 2
+    o[..., 1] = bbox[..., 1] - bbox[..., 3] / 2
+    o[..., 2] = bbox[..., 0] + bbox[..., 2] / 2
+    o[..., 3] = bbox[..., 1] + bbox[..., 3] / 2
+    return o
