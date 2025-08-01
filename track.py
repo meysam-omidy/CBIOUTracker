@@ -1,45 +1,28 @@
 import numpy as np
 import textwrap
-from track_state import STATE_UNCONFIRMED, STATE_NEW, STATE_TRACKING, STATE_LOST, STATE_DELETED
-from utils import classproperty
+from track_state import STATE_UNCONFIRMED, STATE_NEW, STATE_TRACKING, STATE_LOST, STATE_DELETED, TrackState
 
 class Track:
-    @staticmethod
-    def init(max_age, min_box_area, max_aspect_ratio, min_frames_to_predict):
-        Track.INSTANCES:list['Track'] = []
-        Track.ID_COUNTER = 1
-        Track.FRAME_NUMBER = 0
-        Track.MAX_AGE = max_age
-        Track.MIN_BOX_AREA = min_box_area
-        Track.MAX_ASPECT_RATIO = max_aspect_ratio
-        Track.MIN_FRAMES_TO_PREDICT = min_frames_to_predict
+    @classmethod
+    def init(cls, max_age, min_box_area, max_aspect_ratio, min_frames_to_predict):
+        cls.INSTANCES:list['Track'] = []
+        cls.ID_COUNTER = 1
+        cls.FRAME_NUMBER = 0
+        cls.MAX_AGE = max_age
+        cls.MIN_BOX_AREA = min_box_area
+        cls.MAX_ASPECT_RATIO = max_aspect_ratio
+        cls.MIN_FRAMES_TO_PREDICT = min_frames_to_predict
 
-    @staticmethod
-    def predict_all() -> None:
-        Track.FRAME_NUMBER += 1
-        for track in Track.INSTANCES:
+    @classmethod
+    def predict_all(cls) -> None:
+        cls.FRAME_NUMBER += 1
+        for track in cls.INSTANCES:
             if track.state not in [STATE_DELETED]:
                 track.predict()
-    
-    @classproperty
-    def ALIVE_TRACKS(cls): 
-        return [track for track in cls.INSTANCES if track.state not in [STATE_DELETED]]
-    
-    @classproperty
-    def DELETED_TRACKS(cls): 
-        return [track for track in cls.INSTANCES if track.state in [STATE_DELETED]]
-    
-    @classproperty
-    def TRACKING_TRACKS(cls): 
-        return [track for track in cls.INSTANCES if track.state in [STATE_TRACKING]]
-    
-    @classproperty
-    def OUTPUT_TRACKS(cls):
-        return [track for track in cls.INSTANCES if track.state in [STATE_TRACKING, STATE_NEW]]
 
-    @classproperty
-    def LOST_TRACKS(cls):
-        return [track for track in cls.INSTANCES if track.state in [STATE_LOST]]
+    @classmethod
+    def get_tracks(cls, included_states:list[TrackState]) -> list['Track']:
+        return [track for track in cls.INSTANCES if track.state in included_states]
     
     @property
     def mot_format(self):
@@ -51,7 +34,7 @@ class Track:
             **************************************************************************************************************
             id         -> {self.id}
             state      -> {self.state.name}
-            bbox       -> {self.tlwh}
+            bbox       -> {self.bbox}
             age        -> {self.age}
             score      -> {self.score}
             entered    -> {self.entered_frame}
@@ -61,7 +44,7 @@ class Track:
     
     @property
     def compressed_format(self):
-        return f"{self.state.name}    {self.id}    {self.tlwh}    {self.age}    {self.score}    {self.entered_frame}    {self.exited_frame}    {self.last_state.name if self.last_state else ''}"
+        return f"{self.state.name}    {self.id}    {self.bbox}    {self.age}    {self.score}    {self.entered_frame}    {self.exited_frame}    {self.last_state.name if self.last_state else ''}"
 
     @property
     def score(self):

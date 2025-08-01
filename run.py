@@ -27,7 +27,7 @@ def run():
         for i,frame_number in enumerate(np.unique(gt_dets_file[:,0])):
             dets = detections[detections[:, 0] == frame_number][:, 1:]
             tracker.update(dets)
-            for track in Track.OUTPUT_TRACKS:
+            for track in Track.get_tracks(included_states=[STATE_NEW, STATE_TRACKING]):
                 file.write(f'{track.mot_format}\n')
         file.close()
     seqmap.close()

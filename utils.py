@@ -63,7 +63,10 @@ def match_bboxes(bboxes1, bboxes2, biou_threshold, buffer_scale):
         cost_matrix = 1 - batch_biou(np.array(bboxes1), np.array(bboxes2), buffer_scale)
         matched_tracks, unmatched_tracks, unmatched_detections = assignment(cost_matrix, 1 - biou_threshold)
         return matched_tracks, unmatched_tracks, unmatched_detections
-    
+
+def select_indices(arr, indices):
+    return [arr[index] for index in indices]
+
 def tlbr_to_tlwh(bbox:np.ndarray) -> np.ndarray:
     o = np.zeros_like(bbox, dtype=float)
     o[..., 0] = bbox[..., 0]
