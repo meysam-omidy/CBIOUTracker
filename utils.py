@@ -2,17 +2,6 @@ import numpy as np
 import lap
 import time
 
-class ClassPropertyDescriptor:
-    def __init__(self, fget):
-        self.fget = fget
-
-    def __get__(self, obj, cls):
-        return self.fget(cls)
-
-
-def classproperty(func):
-    return ClassPropertyDescriptor(func)
-
 def count_time(func):
     def wrapper(*args, **kwargs):
         start = time.time()
@@ -63,10 +52,10 @@ def match_bboxes(bboxes1, bboxes2, biou_threshold, buffer_scale):
         cost_matrix = 1 - batch_biou(np.array(bboxes1), np.array(bboxes2), buffer_scale)
         matched_tracks, unmatched_tracks, unmatched_detections = assignment(cost_matrix, 1 - biou_threshold)
         return matched_tracks, unmatched_tracks, unmatched_detections
-
+    
 def select_indices(arr, indices):
     return [arr[index] for index in indices]
-
+    
 def tlbr_to_tlwh(bbox:np.ndarray) -> np.ndarray:
     o = np.zeros_like(bbox, dtype=float)
     o[..., 0] = bbox[..., 0]
@@ -114,3 +103,44 @@ def xywh_to_tlbr(bbox:np.ndarray) -> np.ndarray:
     o[..., 2] = bbox[..., 0] + bbox[..., 2] / 2
     o[..., 3] = bbox[..., 1] + bbox[..., 3] / 2
     return o
+
+def tlwh_to_z(bbox:np.ndarray) -> np.ndarray:
+    o = np.zeros_like(bbox, dtype=float)
+    o[..., 0] = bbox[..., 0] + bbox[..., 2] / 2
+    o[..., 1] = bbox[..., 1] + bbox[..., 3] / 2
+    o[..., 2] = bbox[..., 2] / bbox[..., 3]
+    o[..., 3] = bbox[..., 3]
+    return o
+
+def tlbr_to_z(bbox:np.ndarray) -> np.ndarray:
+    o = np.zeros_like(bbox, dtype=float)
+    o[..., 0] = (bbox[..., 0] + bbox[..., 2]) / 2
+    o[..., 1] = (bbox[..., 1] + bbox[..., 3]) / 2
+    o[..., 2] = (bbox[..., 2] - bbox[..., 0]) / (bbox[..., 3] - bbox[..., 1])
+    o[..., 3] = bbox[..., 3] - bbox[..., 1]
+    return o
+
+def z_to_tlwh(z:np.ndarray) -> np.ndarray:
+    o = np.zeros_like(z, dtype=float)
+    o[..., 0] = z[..., 0] - z[..., 2] * z[..., 3] / 2
+    o[..., 1] = z[..., 1] - z[..., 3] / 2
+    o[..., 2] = z[..., 2] * z[..., 3]
+    o[..., 3] = z[..., 3]
+    return o[:4]
+
+def z_to_tlbr(z:np.ndarray) -> np.ndarray:
+    o = np.zeros_like(z, dtype=float)
+    o[..., 0] = z[..., 0] - z[..., 2] * z[..., 3] / 2
+    o[..., 1] = z[..., 1] - z[..., 3] / 2
+    o[..., 2] = z[..., 0] + z[..., 2] * z[..., 3] / 2
+    o[..., 3] = z[..., 1] + z[..., 3] / 2
+    return o[:4]
+
+def z_to_xywh(z:np.ndarray) -> np.ndarray:
+    o = np.zeros_like(z, dtype=float)
+    o[..., 0] = z[..., 0]
+    o[..., 1] = z[..., 1]
+    o[..., 2] = z[..., 2] * z[..., 3]
+    o[..., 3] = z[..., 3]
+    return o[:4]
+

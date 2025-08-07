@@ -5,8 +5,8 @@ import os
 
 @count_time
 def evaluate():
-    # trackers_to_eval = 'bytetrack'
-    trackers_to_eval = 'cbiou'
+    trackers_to_eval = ['cbiou', 'bytetrack', 'bytetrack-self']
+    # trackers_to_eval = 'cbiou'
     dataset = 'MOT17'
 
     eval_config = {'USE_PARALLEL': True,
@@ -29,7 +29,7 @@ def evaluate():
     dataset_config = {'GT_FOLDER': '../../.Datasets/MOT17/train/',
                         'TRACKERS_FOLDER': 'outputs',
                         'OUTPUT_FOLDER': None,
-                        'TRACKERS_TO_EVAL': [trackers_to_eval],
+                        'TRACKERS_TO_EVAL': trackers_to_eval,
                         'CLASSES_TO_EVAL': ['pedestrian'],
                         'BENCHMARK': dataset if 'MOT' in dataset else 'MOT17',
                         # 'SPLIT_TO_EVAL': 'val',
@@ -52,45 +52,47 @@ def evaluate():
     metrics_list = [trackeval.metrics.HOTA(), trackeval.metrics.CLEAR(), trackeval.metrics.Identity()]
     res, _ = evaluator.evaluate(dataset_list, metrics_list)
 
-    # Get
-    hota = np.mean(res['MotChallenge2DBox'][trackers_to_eval]['COMBINED_SEQ']['pedestrian']['HOTA']['HOTA']).item()
-    idf1 = res['MotChallenge2DBox'][trackers_to_eval]['COMBINED_SEQ']['pedestrian']['Identity']['IDF1'].item()
-    mota = res['MotChallenge2DBox'][trackers_to_eval]['COMBINED_SEQ']['pedestrian']['CLEAR']['MOTA'].item()
-    motp = res['MotChallenge2DBox'][trackers_to_eval]['COMBINED_SEQ']['pedestrian']['CLEAR']['MOTP'].item()
-    assa = np.mean(res['MotChallenge2DBox'][trackers_to_eval]['COMBINED_SEQ']['pedestrian']['HOTA']['AssA']).item()
-    deta = np.mean(res['MotChallenge2DBox'][trackers_to_eval]['COMBINED_SEQ']['pedestrian']['HOTA']['DetA']).item()
-    idsw = res['MotChallenge2DBox'][trackers_to_eval]['COMBINED_SEQ']['pedestrian']['CLEAR']['IDSW'].item()
-    tp = res['MotChallenge2DBox'][trackers_to_eval]['COMBINED_SEQ']['pedestrian']['CLEAR']['CLR_TP']
-    fp = res['MotChallenge2DBox'][trackers_to_eval]['COMBINED_SEQ']['pedestrian']['CLEAR']['CLR_FP']
-    fn = res['MotChallenge2DBox'][trackers_to_eval]['COMBINED_SEQ']['pedestrian']['CLEAR']['CLR_FN']
-    mt = res['MotChallenge2DBox'][trackers_to_eval]['COMBINED_SEQ']['pedestrian']['CLEAR']['MT'].item()
-    ml = res['MotChallenge2DBox'][trackers_to_eval]['COMBINED_SEQ']['pedestrian']['CLEAR']['ML'].item()
-        
     os.makedirs('results', exist_ok=True)
-    file = open(f'results/{trackers_to_eval}-results.txt', 'w')
-    file.write(f'MOTA:    {mota}\n')
-    file.write(f'MOTP:    {motp}\n')
-    file.write(f'TP:      {tp}\n')
-    file.write(f'FP:      {fp}\n')
-    file.write(f'FN:      {fn}\n')
-    file.write(f'IDSW:    {idsw}\n')
-    file.write(f'IDF1:    {idf1}\n')
-    file.write(f'MT:      {mt}\n')
-    file.write(f'ML:      {ml}\n')
-    file.write(f'HOTA:    {hota}\n')
-    file.write(f'ASSA:    {assa}\n')
-    file.write(f'DETA:    {deta}\n')
-    file.write('\n')
-    file.write('\n')
-    count = res['MotChallenge2DBox'][trackers_to_eval]['COMBINED_SEQ']['pedestrian']['Count']
-    for key in count.keys():
-        file.write(f'{key}{" "*(11 - len(key))}{count[key]}\n')
-    file.write('\n')
-    file.write('\n')
-    identity = res['MotChallenge2DBox'][trackers_to_eval]['COMBINED_SEQ']['pedestrian']['Identity']
-    for key in identity.keys():
-        file.write(f'{key}{" "*(8 - len(key))}{identity[key].item()}\n')
-    file.close()
+
+    for tracker_to_eval in trackers_to_eval:
+
+        hota = np.mean(res['MotChallenge2DBox'][tracker_to_eval]['COMBINED_SEQ']['pedestrian']['HOTA']['HOTA']).item()
+        idf1 = res['MotChallenge2DBox'][tracker_to_eval]['COMBINED_SEQ']['pedestrian']['Identity']['IDF1'].item()
+        mota = res['MotChallenge2DBox'][tracker_to_eval]['COMBINED_SEQ']['pedestrian']['CLEAR']['MOTA'].item()
+        motp = res['MotChallenge2DBox'][tracker_to_eval]['COMBINED_SEQ']['pedestrian']['CLEAR']['MOTP'].item()
+        assa = np.mean(res['MotChallenge2DBox'][tracker_to_eval]['COMBINED_SEQ']['pedestrian']['HOTA']['AssA']).item()
+        deta = np.mean(res['MotChallenge2DBox'][tracker_to_eval]['COMBINED_SEQ']['pedestrian']['HOTA']['DetA']).item()
+        idsw = res['MotChallenge2DBox'][tracker_to_eval]['COMBINED_SEQ']['pedestrian']['CLEAR']['IDSW'].item()
+        tp = res['MotChallenge2DBox'][tracker_to_eval]['COMBINED_SEQ']['pedestrian']['CLEAR']['CLR_TP']
+        fp = res['MotChallenge2DBox'][tracker_to_eval]['COMBINED_SEQ']['pedestrian']['CLEAR']['CLR_FP']
+        fn = res['MotChallenge2DBox'][tracker_to_eval]['COMBINED_SEQ']['pedestrian']['CLEAR']['CLR_FN']
+        mt = res['MotChallenge2DBox'][tracker_to_eval]['COMBINED_SEQ']['pedestrian']['CLEAR']['MT'].item()
+        ml = res['MotChallenge2DBox'][tracker_to_eval]['COMBINED_SEQ']['pedestrian']['CLEAR']['ML'].item()
+        
+        file = open(f'results/{tracker_to_eval}-results.txt', 'w')
+        file.write(f'MOTA:    {mota}\n')
+        file.write(f'MOTP:    {motp}\n')
+        file.write(f'TP:      {tp}\n')
+        file.write(f'FP:      {fp}\n')
+        file.write(f'FN:      {fn}\n')
+        file.write(f'IDSW:    {idsw}\n')
+        file.write(f'IDF1:    {idf1}\n')
+        file.write(f'MT:      {mt}\n')
+        file.write(f'ML:      {ml}\n')
+        file.write(f'HOTA:    {hota}\n')
+        file.write(f'ASSA:    {assa}\n')
+        file.write(f'DETA:    {deta}\n')
+        file.write('\n')
+        file.write('\n')
+        count = res['MotChallenge2DBox'][tracker_to_eval]['COMBINED_SEQ']['pedestrian']['Count']
+        for key in count.keys():
+            file.write(f'{key}{" "*(11 - len(key))}{count[key]}\n')
+        file.write('\n')
+        file.write('\n')
+        identity = res['MotChallenge2DBox'][tracker_to_eval]['COMBINED_SEQ']['pedestrian']['Identity']
+        for key in identity.keys():
+            file.write(f'{key}{" "*(8 - len(key))}{identity[key].item()}\n')
+        file.close()
 
 if __name__ == '__main__':
     evaluate()

@@ -1,17 +1,22 @@
 import numpy as np
 import textwrap
-from track_state import STATE_UNCONFIRMED, STATE_NEW, STATE_TRACKING, STATE_LOST, STATE_DELETED, TrackState
+from track_state import STATE_UNCONFIRMED, STATE_TRACKING, STATE_LOST, STATE_DELETED, TrackState
+from utils import z_to_tlwh, z_to_tlbr, z_to_xywh,tlbr_to_z, tlbr_to_tlwh
+from filterpy.kalman import KalmanFilter
 
 class Track:
     @classmethod
-    def init(cls, max_age, min_box_area, max_aspect_ratio, min_frames_to_predict):
+    def init(cls, max_age, min_box_area, max_aspect_ratio):
         cls.INSTANCES:list['Track'] = []
         cls.ID_COUNTER = 1
         cls.FRAME_NUMBER = 0
         cls.MAX_AGE = max_age
         cls.MIN_BOX_AREA = min_box_area
         cls.MAX_ASPECT_RATIO = max_aspect_ratio
-        cls.MIN_FRAMES_TO_PREDICT = min_frames_to_predict
+
+    @classmethod
+    def get_tracks(cls, included_states:list[TrackState]) -> list['Track']:
+        return [track for track in cls.INSTANCES if track.state in included_states]
 
     @classmethod
     def predict_all(cls) -> None:
@@ -19,14 +24,10 @@ class Track:
         for track in cls.INSTANCES:
             if track.state not in [STATE_DELETED]:
                 track.predict()
-
-    @classmethod
-    def get_tracks(cls, included_states:list[TrackState]) -> list['Track']:
-        return [track for track in cls.INSTANCES if track.state in included_states]
     
     @property
     def mot_format(self):
-        return f"{int(Track.FRAME_NUMBER)},{int(self.id)},{round(self.bbox[0], 1)},{round(self.bbox[1], 1)},{round(self.bbox[2], 1)},{round(self.bbox[3], 1)},{round(self.score, 2)},-1,-1,-1"
+        return f"{int(Track.FRAME_NUMBER)},{int(self.id)},{round(self.tlwh[0], 1)},{round(self.tlwh[1], 1)},{round(self.tlwh[2], 1)},{round(self.tlwh[3], 1)},{round(self.score, 2)},-1,-1,-1"
 
     @property
     def clean_format(self):
@@ -34,7 +35,7 @@ class Track:
             **************************************************************************************************************
             id         -> {self.id}
             state      -> {self.state.name}
-            bbox       -> {self.bbox}
+            bbox       -> {self.tlwh}
             age        -> {self.age}
             score      -> {self.score}
             entered    -> {self.entered_frame}
@@ -44,34 +45,35 @@ class Track:
     
     @property
     def compressed_format(self):
-        return f"{self.state.name}    {self.id}    {self.bbox}    {self.age}    {self.score}    {self.entered_frame}    {self.exited_frame}    {self.last_state.name if self.last_state else ''}"
+        return f"{self.state.name}    {self.id}    {self.tlwh}    {self.age}    {self.score}    {self.entered_frame}    {self.exited_frame}    {self.last_state.name if self.last_state else ''}"
 
     @property
     def score(self):
         if len(self.scores) > 0:
-            # return float(np.mean(self.scores))
-            return self.scores[-1]
+            return float(self.scores[-1])
         else:
             return 0
 
     @property
+    def tlwh(self):
+        return z_to_tlwh(np.array(self.kf.x).reshape(-1))
+
+    @property
     def tlbr(self):
-        bbox = self.bbox
-        return np.array([bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3]])
+        return z_to_tlbr(np.array(self.kf.x).reshape(-1))
     
     @property
     def xywh(self):
-        bbox = self.bbox
-        return np.array([bbox[0] + bbox[2] / 2, bbox[1] + bbox[3] / 2, bbox[2], bbox[3]])
+        return z_to_xywh(np.array(self.kf.x).reshape(-1))
     
     @property
     def valid(self):
         invalid_conditions = [
             self.age > Track.MAX_AGE,
             self.state == STATE_UNCONFIRMED and self.age >= 2,
-            (self.bbox[2] * self.bbox[3]) < Track.MIN_BOX_AREA,
-            (self.bbox[2] / self.bbox[3]) > Track.MAX_ASPECT_RATIO,
-            np.any(np.isnan(self.bbox)) or np.any(self.bbox[2:] <= 0)
+            (self.tlwh[2] * self.tlwh[3]) < Track.MIN_BOX_AREA,
+            (self.tlwh[2] / self.tlwh[3]) > Track.MAX_ASPECT_RATIO,
+            np.any(np.isnan(self.tlwh)) or np.any(self.tlwh[2:] <= 0)
         ]   
         if any(invalid_conditions):
             return False
@@ -84,9 +86,9 @@ class Track:
         else:
             self.state = state
         self.last_state = None
-        self.bbox = np.array(bbox).copy()
+        self.init_kalman_filter(bbox)
         self.predict_history = []
-        self.update_history = [np.array(bbox).copy()]
+        self.update_history = [self.tlwh]
         self.scores = [float(score)]
         self.age = 0
         self.entered_frame = Track.FRAME_NUMBER
@@ -98,32 +100,37 @@ class Track:
     def __str__(self):
         return self.clean_format
 
+    def init_kalman_filter(self, bbox:np.ndarray) -> KalmanFilter:
+        self.kf = KalmanFilter(dim_x=7, dim_z=4)
+        self.kf.F = np.array([[1,0,0,0,1,0,0],[0,1,0,0,0,1,0],[0,0,1,0,0,0,0],[0,0,0,1,0,0,1],[0,0,0,0,1,0,0],[0,0,0,0,0,1,0],[0,0,0,0,0,0,1]])
+        # self.kf.F = np.array([[1,0,0,0,1,0,0],[0,1,0,0,0,1,0],[0,0,1,0,0,0,1],[0,0,0,1,0,0,0],[0,0,0,0,1,0,0],[0,0,0,0,0,1,0],[0,0,0,0,0,0,1]])
+        self.kf.H = np.array([[1,0,0,0,0,0,0],[0,1,0,0,0,0,0],[0,0,1,0,0,0,0],[0,0,0,1,0,0,0]])
+        self.kf.R[2:,2:] *= 10
+        self.kf.P[4:,4:] *= 1000
+        self.kf.P *= 10.
+        self.kf.Q[-1,-1] *= 0.01
+        self.kf.Q[4:,4:] *= 0.01
+        self.kf.x[:4] = tlbr_to_z(bbox).reshape(-1, 1)
+
     def predict(self):
         self.age += 1
+        self.kf.predict()
         if not self.valid:
             self.last_state = self.state
             self.state = STATE_DELETED
             self.exited_frame = Track.FRAME_NUMBER
             return
-        if self.state in [STATE_TRACKING, STATE_NEW] and self.age >= 2:
-            self.last_state = self.state
+        self.predict_history.append(self.tlwh)
+        if self.state == STATE_TRACKING and self.age >= 2:
             self.state = STATE_LOST
-        if STATE_TRACKING in [self.state, self.last_state]:
-            delta = (self.update_history[-1] - self.update_history[-Track.MIN_FRAMES_TO_PREDICT]) / (Track.MIN_FRAMES_TO_PREDICT - 1)
-            new_bbox = self.predict_history[-1] + delta
-            self.predict_history.append(new_bbox)
-            self.bbox = new_bbox.copy()
             
     def update(self, bbox, score):
-        self.update_history.append(np.array(bbox).copy())
+        self.kf.update(tlbr_to_z(bbox))
+        self.update_history.append(tlbr_to_tlwh(bbox))
         self.scores.append(float(score))
-        self.bbox = np.array(bbox).copy()
         self.age = 0
-        if self.state == STATE_NEW and len(self.update_history) >= Track.MIN_FRAMES_TO_PREDICT:
-            self.predict_history = self.update_history.copy()
-            self.state = STATE_TRACKING
         if self.state == STATE_UNCONFIRMED:
-            self.state = STATE_NEW
+            self.state = STATE_TRACKING
         if self.state == STATE_LOST:
-            self.state = self.last_state
+            self.state = STATE_TRACKING
             self.last_state = None
