@@ -5,7 +5,7 @@ import os
 
 @count_time
 def evaluate():
-    trackers_to_eval = ['cbiou', 'bytetrack', 'bytetrack-self']
+    trackers_to_eval = ['cbiou', 'bytetrack', 'bytetrack-self', 'oc-sort']
     # trackers_to_eval = 'cbiou'
     dataset = 'MOT17'
 

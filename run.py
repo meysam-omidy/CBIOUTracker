@@ -9,8 +9,8 @@ from utils import count_time
 
 @count_time
 def run():
-    seqs = ['MOT17-13-FRCNN', ]
-    # seqs = ['MOT17-02-FRCNN', 'MOT17-04-FRCNN', 'MOT17-05-FRCNN', 'MOT17-09-FRCNN', 'MOT17-10-FRCNN', 'MOT17-11-FRCNN', 'MOT17-13-FRCNN', ]
+    # seqs = ['MOT17-05-FRCNN', ]
+    seqs = ['MOT17-02-FRCNN', 'MOT17-04-FRCNN', 'MOT17-05-FRCNN', 'MOT17-09-FRCNN', 'MOT17-10-FRCNN', 'MOT17-11-FRCNN', 'MOT17-13-FRCNN', ]
 
 
     os.makedirs('outputs/cbiou', exist_ok=True)
@@ -21,9 +21,8 @@ def run():
         
         seqmap.write(f'{seq}\n')
         file = open(f'outputs/cbiou/{seq}.txt', 'w')
-        # detections = detections_file[seq]
+        # detections = np.loadtxt(f'detections/gt/{seq}.txt', delimiter=',')
         detections = np.loadtxt(f'detections/bytetrack_x_mot17/{seq}.txt', delimiter=',')
-        # detections = np.loadtxt('detections/MOT17-04-bytetrack-mot17-x.txt', delimiter=',')
         gt_dets_file = np.loadtxt(f'../../.Datasets/MOT17/train/{seq}/gt/gt.txt', delimiter=',')
 
         # cbiou = CBIOUTracker()

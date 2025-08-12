@@ -89,10 +89,14 @@ class Track:
         self.init_kalman_filter(bbox)
         self.predict_history = []
         self.update_history = [self.tlwh]
+        self.state_history = [self.state]
         self.scores = [float(score)]
         self.age = 0
         self.entered_frame = Track.FRAME_NUMBER
         self.exited_frame = -1
+        self.logs = {
+            'max_time_lost': 0
+        }
         self.id = Track.ID_COUNTER
         Track.ID_COUNTER += 1
         Track.INSTANCES.append(self)
@@ -123,11 +127,13 @@ class Track:
         self.predict_history.append(self.tlwh)
         if self.state == STATE_TRACKING and self.age >= 2:
             self.state = STATE_LOST
+        self.state_history.append(self.state)
             
     def update(self, bbox, score):
         self.kf.update(tlbr_to_z(bbox))
         self.update_history.append(tlbr_to_tlwh(bbox))
         self.scores.append(float(score))
+        self.logs['max_time_lost'] = max(self.age, self.logs['max_time_lost'])
         self.age = 0
         if self.state == STATE_UNCONFIRMED:
             self.state = STATE_TRACKING
