@@ -30,28 +30,54 @@ def batch_biou(bbox1, bbox2, buffer_scale):
         + (bbox2[..., 2] - bbox2[..., 0]) * (bbox2[..., 3] - bbox2[..., 1]) - wh)                                              
     return(o) 
 
-def assignment(cost_matrix, threshold):
+def batch_iou(bb1, bb2):
+    bb1 = np.expand_dims(bb1, 1)
+    bb2 = np.expand_dims(bb2, 0)
+    xx1 = np.maximum(bb1[..., 0], bb2[..., 0])
+    yy1 = np.maximum(bb1[..., 1], bb2[..., 1])
+    xx2 = np.minimum(bb1[..., 2], bb2[..., 2])
+    yy2 = np.minimum(bb1[..., 3], bb2[..., 3])
+    w = np.maximum(0., xx2 - xx1)
+    h = np.maximum(0., yy2 - yy1)
+    wh = w * h
+    o = wh / ((bb1[..., 2] - bb1[..., 0]) * (bb1[..., 3] - bb1[..., 1])                                      
+        + (bb2[..., 2] - bb2[..., 0]) * (bb2[..., 3] - bb2[..., 1]) - wh)                                              
+    return(o) 
+
+def assignment(cost_matrix):
     if cost_matrix.size == 0:
         return np.empty((0, 2), dtype=int), tuple(range(cost_matrix.shape[0])), tuple(range(cost_matrix.shape[1]))
     matches, unmatched_a, unmatched_b = [], [], []
-    cost, x, y = lap.lapjv(cost_matrix, extend_cost=True, cost_limit=threshold)
+    cost, x, y = lap.lapjv(cost_matrix, extend_cost=True)
     for ix, mx in enumerate(x):
         if mx >= 0:
             matches.append([ix, mx])
     unmatched_a = np.where(x < 0)[0]
     unmatched_b = np.where(y < 0)[0]
     matches = np.asarray(matches)
-    return matches, unmatched_a, unmatched_b
+    return matches.tolist(), unmatched_a.tolist(), unmatched_b.tolist()
 
-def match_bboxes(bboxes1, bboxes2, biou_threshold, buffer_scale):
-    if len(bboxes1) == 0:
-        return [], [], [i for i in range(len(bboxes2))]
-    elif len(bboxes2) == 0:
-        return [], [i for i in range(len(bboxes1))], []
-    else:
-        cost_matrix = 1 - batch_biou(np.array(bboxes1), np.array(bboxes2), buffer_scale)
-        matched_tracks, unmatched_tracks, unmatched_detections = assignment(cost_matrix, 1 - biou_threshold)
-        return matched_tracks, unmatched_tracks, unmatched_detections
+def associate(tracks, detections, iou_threshold, buffer_scale):
+    if len(tracks) == 0:
+        return [], [], [i for i in range(len(detections))]
+    elif len(detections) == 0:
+        return [], [i for i in range(len(tracks))], []
+    
+    track_xywhs = np.array([t.xywh for t in tracks])
+    track_tlbrs = np.array([t.tlbr for t in tracks])
+    detection_xywhs = np.array([tlbr_to_xywh(d) for d in detections])
+    cost = 1 - batch_biou(track_xywhs, detection_xywhs, buffer_scale)
+    ious = batch_iou(track_tlbrs, detections)
+    matched_tracks, unmatched_tracks, unmatched_detections = assignment(cost)
+    matchs_to_remove = []
+    for i, j in matched_tracks:
+        if ious[i,j] <= iou_threshold:
+            matchs_to_remove.append([i,j])
+            unmatched_tracks.append(i)
+            unmatched_detections.append(j)
+    for i,j in matchs_to_remove:
+        matched_tracks.remove([i,j])
+    return matched_tracks, unmatched_tracks, unmatched_detections
     
 def select_indices(arr, indices):
     return [arr[index] for index in indices]

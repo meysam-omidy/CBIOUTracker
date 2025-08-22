@@ -156,9 +156,9 @@ def cbiou_track(params):
 if __name__ == '__main__':
     all_params = []
     all_names = []
-    for p1 in [0.3, 0.4 ,0.5]:
-        for p2 in [0.5, 0.6, 0.7]:
-            for p3 in [0.4, 0.5 ,0.6]:
+    for p1 in [0.1, 0.2, 0.3, 0.4 ,0.5]:
+        for p2 in [0.3, 0.4, 0.5, 0.6, 0.7]:
+            for p3 in [0.2, 0.3, 0.4, 0.5 ,0.6]:
                 # run((p1, p2, p3))
                 # all_params.append((p1, p2, p3))
                 all_names.append(f'{p1}-{p2}-{p3}')

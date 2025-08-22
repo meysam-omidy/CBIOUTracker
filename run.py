@@ -27,9 +27,9 @@ def run():
 
         # cbiou = CBIOUTracker()
         tracker = CBIOUTracker({
-            'buffer_scale1': 0.3,
-            'buffer_scale2': 0.5,
-            'buffer_scale3': 0.5,
+            'buffer_scale1': 0.5,
+            'buffer_scale2': 0.3,
+            'buffer_scale3': 0.4,
             'match_high_score_dets_with_confirmed_trks_threshold' : 0.2,
             'match_low_score_dets_with_confirmed_trks_threshold' : 0.5,
             'match_remained_high_score_dets_with_unconfirmed_trks_threshold' : 0.3,

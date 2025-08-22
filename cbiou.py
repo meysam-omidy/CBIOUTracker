@@ -1,6 +1,6 @@
 from track import Track
 from track_state import STATE_UNCONFIRMED, STATE_TRACKING, STATE_LOST, STATE_DELETED
-from utils import match_bboxes, select_indices, tlbr_to_xywh, xywh_to_tlwh
+from utils import select_indices, tlbr_to_xywh, xywh_to_tlwh, associate
 from pydantic import BaseModel
 import numpy as np
 import time
@@ -15,9 +15,10 @@ class CBIOUTrackerConfig(BaseModel):
     match_high_score_dets_with_confirmed_trks_threshold : float = 0.2
     match_low_score_dets_with_confirmed_trks_threshold : float = 0.5
     match_remained_high_score_dets_with_unconfirmed_trks_threshold : float = 0.3
-    buffer_scale1:float = 0
-    buffer_scale2:float = 0
-    buffer_scale3:float = 0
+    buffer_scale1:float = 0.3
+    buffer_scale2:float = 0.5
+    buffer_scale3:float = 0.5
+    use_byte:bool = False
 
 
 class CBIOUTracker:
@@ -33,26 +34,36 @@ class CBIOUTracker:
         low_confidence_detections = boxes[np.logical_and(boxes[:, 4] <= self.config.high_score_det_threshold, boxes[:, 4] >= self.config.low_score_det_threshold)][:, :4]
         low_scores = boxes[np.logical_and(boxes[:, 4] <= self.config.high_score_det_threshold, boxes[:, 4] >= self.config.low_score_det_threshold)][:, 4]
         confirmed_tracks = Track.get_tracks([STATE_TRACKING, STATE_LOST])
-        confirmed_trks = [t.xywh for t in confirmed_tracks]
-        high_confidence_dets = [tlbr_to_xywh(detection) for detection in high_confidence_detections]
-        matches, unmatched_confirmed_track_indices, unmatched_high_confidence_detection_indices = match_bboxes(confirmed_trks, high_confidence_dets, self.config.match_high_score_dets_with_confirmed_trks_threshold, self.config.buffer_scale1)
+        matches, unmatched_confirmed_track_indices, unmatched_high_confidence_detection_indices = associate(
+            confirmed_tracks, 
+            high_confidence_detections,
+            self.config.match_high_score_dets_with_confirmed_trks_threshold,
+            self.config.buffer_scale1
+        )
         for t_i, d_i in matches:
             confirmed_tracks[t_i].update(high_confidence_detections[d_i], score=high_scores[d_i])
 
-        remained_confirmed_tracks = select_indices(confirmed_tracks, unmatched_confirmed_track_indices)
-        remained_tracking_tracks = [t for t in remained_confirmed_tracks if t.state == STATE_TRACKING]
-        remained_tracking_trks = [t.xywh for t in remained_tracking_tracks]
-        low_confidence_dets = [tlbr_to_xywh(detection) for detection in low_confidence_detections]
-        matches, unmatched_remained_track_indices, unmatched_low_score_detection_indices = match_bboxes(remained_tracking_trks, low_confidence_dets, self.config.match_low_score_dets_with_confirmed_trks_threshold, self.config.buffer_scale2)
-        for t_i, d_i in matches:
-            remained_tracking_tracks[t_i].update(low_confidence_detections[d_i], score=low_scores[d_i])
+        if self.config.use_byte:
+            remained_confirmed_tracks = select_indices(confirmed_tracks, unmatched_confirmed_track_indices)
+            remained_tracking_tracks = [t for t in remained_confirmed_tracks if t.state == STATE_TRACKING]
+            matches, unmatched_remained_track_indices, unmatched_low_score_detection_indices = associate(
+                remained_tracking_tracks,
+                low_confidence_detections,
+                self.config.match_low_score_dets_with_confirmed_trks_threshold,
+                self.config.buffer_scale2
+            )
+            for t_i, d_i in matches:
+                remained_tracking_tracks[t_i].update(low_confidence_detections[d_i], score=low_scores[d_i])
 
         remained_high_confidence_detections = select_indices(high_confidence_detections, unmatched_high_confidence_detection_indices)
         remained_high_scores = select_indices(high_scores, unmatched_high_confidence_detection_indices)
         unconfirmed_tracks = Track.get_tracks([STATE_UNCONFIRMED])
-        unconfirmed_trks = [t.xywh for t in unconfirmed_tracks]
-        remained_high_confidence_dets = [tlbr_to_xywh(detection) for detection in remained_high_confidence_detections]
-        matches, unmatched_unconfirmed_track_indices, unmatched_remained_high_score_detection_indices = match_bboxes(unconfirmed_trks, remained_high_confidence_dets, self.config.match_remained_high_score_dets_with_unconfirmed_trks_threshold, self.config.buffer_scale3)
+        matches, unmatched_unconfirmed_track_indices, unmatched_remained_high_score_detection_indices = associate(
+            unconfirmed_tracks,
+            remained_high_confidence_detections,
+            self.config.match_remained_high_score_dets_with_unconfirmed_trks_threshold,
+            self.config.buffer_scale3
+        )
         for t_i, d_i in matches:
             unconfirmed_tracks[t_i].update(remained_high_confidence_detections[d_i], score=remained_high_scores[d_i])
         
